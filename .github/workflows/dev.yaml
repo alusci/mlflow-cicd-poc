@@ -1,0 +1,29 @@
+
+name: Dev Pipeline
+
+on:
+  push:
+    branches: [ "dev" ]
+
+jobs:
+  run-databricks-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Databricks Job (DEV)
+        env:
+          DATABRICKS_HOST: https://community.cloud.databricks.com
+          DATABRICKS_TOKEN: ${{ dapi0d9146be3b55971cd41f428742126489 }}
+          JOB_ID: 669875622396069 # your DEV job id
+        run: |
+          curl -X POST "$DATABRICKS_HOST/api/2.1/jobs/run-now" \
+            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"job_id\": $JOB_ID,
+              \"notebook_params\": {
+                \"git_ref\": \"${{ github.ref_name }}\",
+                \"git_sha\": \"${{ github.sha }}\",
+                \"n_estimators\": \"150\",
+                \"accuracy_threshold\": \"0.87\"
+              }
+            }"
