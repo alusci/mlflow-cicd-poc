@@ -1,3 +1,4 @@
+
 name: Dev Pipeline
 
 on:
@@ -8,6 +9,7 @@ jobs:
   run-databricks-dev:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+
     steps:
       - name: Trigger Databricks Job (DEV)
         id: runnow
@@ -34,18 +36,16 @@ jobs:
 
           echo "Run-now response: $resp"
 
-          # Extract run_id safely with Python (jq not required)
-          run_id=$(echo "$resp" | python3 - << 'PY'
-import sys, json
-data = json.load(sys.stdin)
-print(data.get("run_id",""))
-PY
-)
+          # Extract run_id with a Python one-liner (no heredoc)
+          run_id=$(echo "$resp" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("run_id",""))')
           if [ -z "$run_id" ]; then
             echo "Failed to obtain run_id from run-now response"
             exit 1
           fi
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+          # (Facoltativo) stampa URL cliccabile del run
+          echo "Run page: $DATABRICKS_HOST/#job/$JOB_ID/run/$run_id"
 
       - name: Wait for Databricks job to complete (DEV)
         env:
@@ -67,19 +67,15 @@ PY
             resp=$(curl -sS -X GET "$DATABRICKS_HOST/api/2.1/jobs/runs/get?run_id=$run_id" \
               -H "Authorization: Bearer $DATABRICKS_TOKEN")
 
-            # Parse lifecycle & result
-            read lifecycle result < <(echo "$resp" | python3 - << 'PY'
-import sys, json
-data = json.load(sys.stdin)
-state = data.get("state", {})
-print(state.get("life_cycle_state",""), state.get("result_state",""))
-PY
-)
+            # Parse lifecycle & result with Python one-liners
+            lifecycle=$(echo "$resp" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("state",{}).get("life_cycle_state",""))')
+            result=$(echo "$resp" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("state",{}).get("result_state",""))')
+
             echo "lifecycle=$lifecycle result=$result elapsed=${elapsed}s"
 
             # Terminal lifecycle states
             if [ "$lifecycle" = "TERMINATED" ] || [ "$lifecycle" = "INTERNAL_ERROR" ] || [ "$lifecycle" = "SKIPPED" ]; then
-              # Fetch output for visibility
+              # Fetch output per visibilità
               out=$(curl -sS -X GET "$DATABRICKS_HOST/api/2.1/jobs/runs/get-output?run_id=$run_id" \
                 -H "Authorization: Bearer $DATABRICKS_TOKEN" || true)
               echo "===== Run Output (truncated) ====="
