@@ -7,7 +7,7 @@ on:
 jobs:
   run-databricks-dev:
     runs-on: ubuntu-latest
-    timeout-minutes: 180              # optional: cap total job time in Actions
+    timeout-minutes: 180
     steps:
       - name: Trigger Databricks Job (DEV)
         id: runnow
@@ -36,11 +36,11 @@ jobs:
 
           # Extract run_id safely with Python (jq not required)
           run_id=$(echo "$resp" | python3 - << 'PY'
-            import sys, json
-            data = json.load(sys.stdin)
-            print(data.get("run_id",""))
-            PY
-          )
+import sys, json
+data = json.load(sys.stdin)
+print(data.get("run_id",""))
+PY
+)
           if [ -z "$run_id" ]; then
             echo "Failed to obtain run_id from run-now response"
             exit 1
@@ -51,8 +51,8 @@ jobs:
         env:
           DATABRICKS_HOST: https://dbc-df542d18-8957.cloud.databricks.com
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          POLL_INTERVAL_SEC: "15"     # adjust as desired
-          MAX_MINUTES: "120"          # hard timeout for waiting loop
+          POLL_INTERVAL_SEC: "15"
+          MAX_MINUTES: "120"
         run: |
           set -euo pipefail
 
@@ -67,20 +67,19 @@ jobs:
             resp=$(curl -sS -X GET "$DATABRICKS_HOST/api/2.1/jobs/runs/get?run_id=$run_id" \
               -H "Authorization: Bearer $DATABRICKS_TOKEN")
 
-            echo "Poll response (truncated): $(echo "$resp" | head -c 1000)"
-
+            # Parse lifecycle & result
             read lifecycle result < <(echo "$resp" | python3 - << 'PY'
-              import sys, json
-              data = json.load(sys.stdin)
-              state = data.get("state", {})
-              print(state.get("life_cycle_state",""), state.get("result_state",""))
-              PY
-            )
+import sys, json
+data = json.load(sys.stdin)
+state = data.get("state", {})
+print(state.get("life_cycle_state",""), state.get("result_state",""))
+PY
+)
             echo "lifecycle=$lifecycle result=$result elapsed=${elapsed}s"
 
             # Terminal lifecycle states
             if [ "$lifecycle" = "TERMINATED" ] || [ "$lifecycle" = "INTERNAL_ERROR" ] || [ "$lifecycle" = "SKIPPED" ]; then
-              # Fetch output for more details (even on success)
+              # Fetch output for visibility
               out=$(curl -sS -X GET "$DATABRICKS_HOST/api/2.1/jobs/runs/get-output?run_id=$run_id" \
                 -H "Authorization: Bearer $DATABRICKS_TOKEN" || true)
               echo "===== Run Output (truncated) ====="
