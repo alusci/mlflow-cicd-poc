@@ -12,7 +12,7 @@ jobs:
       - name: Trigger Databricks Job (DEV)
         env:
           DATABRICKS_HOST: https://community.cloud.databricks.com
-          DATABRICKS_TOKEN: ${{ dapi0d9146be3b55971cd41f428742126489 }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           JOB_ID: 669875622396069 # your DEV job id
         run: |
           curl -X POST "$DATABRICKS_HOST/api/2.1/jobs/run-now" \
