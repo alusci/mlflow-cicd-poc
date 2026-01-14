@@ -1,3 +1,8 @@
+name: Dev Pipeline
+
+on:
+  push:
+    branches: [ "dev" ]
 
 jobs:
   run-databricks-dev:
