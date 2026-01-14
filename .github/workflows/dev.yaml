@@ -76,12 +76,8 @@ jobs:
             # Terminal lifecycle states
             if [ "$lifecycle" = "TERMINATED" ] || [ "$lifecycle" = "INTERNAL_ERROR" ] || [ "$lifecycle" = "SKIPPED" ]; then
               # Fetch output per visibilità
-              out=$(curl -sS -X GET "$DATABRICKS_HOST/api/2.1/jobs/runs/get-output?run_id=$run_id" \
-                -H "Authorization: Bearer $DATABRICKS_TOKEN" || true)
-              echo "===== Run Output (truncated) ====="
-              echo "$out" | head -c 20000 || true
-              echo "=================================="
-
+              echo "Final run state: $resp"
+              
               if [ "$result" = "SUCCESS" ]; then
                 echo "Run finished successfully."
                 break
