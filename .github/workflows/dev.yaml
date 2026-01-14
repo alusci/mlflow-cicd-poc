@@ -1,21 +1,20 @@
 
-name: Dev Pipeline
-
-on:
-  push:
-    branches: [ "dev" ]
-
 jobs:
   run-databricks-dev:
     runs-on: ubuntu-latest
+    timeout-minutes: 180              # optional: cap total job time in Actions
     steps:
       - name: Trigger Databricks Job (DEV)
+        id: runnow
         env:
           DATABRICKS_HOST: https://dbc-df542d18-8957.cloud.databricks.com
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          JOB_ID: 669875622396069 # your DEV job id
+          JOB_ID: 669875622396069
         run: |
-          curl -X POST "$DATABRICKS_HOST/api/2.1/jobs/run-now" \
+          set -euo pipefail
+
+          # Trigger the job
+          resp=$(curl -sS -X POST "$DATABRICKS_HOST/api/2.1/jobs/run-now" \
             -H "Authorization: Bearer $DATABRICKS_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{
@@ -26,4 +25,77 @@ jobs:
                 \"n_estimators\": \"150\",
                 \"accuracy_threshold\": \"0.87\"
               }
-            }"
+            }")
+
+          echo "Run-now response: $resp"
+
+          # Extract run_id safely with Python (jq not required)
+          run_id=$(echo "$resp" | python3 - << 'PY'
+            import sys, json
+            data = json.load(sys.stdin)
+            print(data.get("run_id",""))
+            PY
+          )
+          if [ -z "$run_id" ]; then
+            echo "Failed to obtain run_id from run-now response"
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Databricks job to complete (DEV)
+        env:
+          DATABRICKS_HOST: https://dbc-df542d18-8957.cloud.databricks.com
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          POLL_INTERVAL_SEC: "15"     # adjust as desired
+          MAX_MINUTES: "120"          # hard timeout for waiting loop
+        run: |
+          set -euo pipefail
+
+          run_id="${{ steps.runnow.outputs.run_id }}"
+          echo "Waiting for run_id=$run_id"
+
+          max_seconds=$(( ${MAX_MINUTES} * 60 ))
+          poll="${POLL_INTERVAL_SEC}"
+          elapsed=0
+
+          while true; do
+            resp=$(curl -sS -X GET "$DATABRICKS_HOST/api/2.1/jobs/runs/get?run_id=$run_id" \
+              -H "Authorization: Bearer $DATABRICKS_TOKEN")
+
+            echo "Poll response (truncated): $(echo "$resp" | head -c 1000)"
+
+            read lifecycle result < <(echo "$resp" | python3 - << 'PY'
+              import sys, json
+              data = json.load(sys.stdin)
+              state = data.get("state", {})
+              print(state.get("life_cycle_state",""), state.get("result_state",""))
+              PY
+            )
+            echo "lifecycle=$lifecycle result=$result elapsed=${elapsed}s"
+
+            # Terminal lifecycle states
+            if [ "$lifecycle" = "TERMINATED" ] || [ "$lifecycle" = "INTERNAL_ERROR" ] || [ "$lifecycle" = "SKIPPED" ]; then
+              # Fetch output for more details (even on success)
+              out=$(curl -sS -X GET "$DATABRICKS_HOST/api/2.1/jobs/runs/get-output?run_id=$run_id" \
+                -H "Authorization: Bearer $DATABRICKS_TOKEN" || true)
+              echo "===== Run Output (truncated) ====="
+              echo "$out" | head -c 20000 || true
+              echo "=================================="
+
+              if [ "$result" = "SUCCESS" ]; then
+                echo "Run finished successfully."
+                break
+              else
+                echo "Run finished with non-success result: $result"
+                exit 1
+              fi
+            fi
+
+            if [ $elapsed -ge $max_seconds ]; then
+              echo "Timeout after ${MAX_MINUTES} minutes waiting for run $run_id"
+              exit 1
+            fi
+
+            sleep "$poll"
+            elapsed=$(( elapsed + poll ))
+          done
