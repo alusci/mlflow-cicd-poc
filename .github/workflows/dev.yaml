@@ -9,6 +9,7 @@ jobs:
   run-databricks-dev:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    environment: dev
 
     steps:
       - name: Trigger Databricks Job (DEV)
@@ -16,7 +17,7 @@ jobs:
         env:
           DATABRICKS_HOST: https://dbc-df542d18-8957.cloud.databricks.com
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          JOB_ID: ${{ secrets.DATABRICKS_JOB_ID_DEV }}
+          JOB_ID: ${{ vars.TRAINING_JOB_ID }}
         run: |
           set -euo pipefail
 
