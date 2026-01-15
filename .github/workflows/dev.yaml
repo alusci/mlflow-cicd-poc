@@ -16,7 +16,7 @@ jobs:
         env:
           DATABRICKS_HOST: https://dbc-df542d18-8957.cloud.databricks.com
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          JOB_ID: 669875622396069
+          JOB_ID: ${{ secrets.DATABRICKS_JOB_ID_DEV }}
         run: |
           set -euo pipefail
 
