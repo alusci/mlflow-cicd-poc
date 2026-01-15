@@ -21,6 +21,12 @@ jobs:
         run: |
           set -euo pipefail
 
+          
+          # --- Validate env vars ---
+          if [ -z "${DATABRICKS_HOST:-}" ]; then echo "DATABRICKS_HOST is empty"; exit 1; fi
+          if [ -z "${DATABRICKS_TOKEN:-}" ]; then echo "DATABRICKS_TOKEN is empty"; exit 1; fi
+          if [ -z "${JOB_ID:-}" ]; then echo "JOB_ID (vars.TRAINING_JOB_ID) is empty"; exit 1; fi
+
           # Trigger the job
           resp=$(curl -sS -X POST "$DATABRICKS_HOST/api/2.1/jobs/run-now" \
             -H "Authorization: Bearer $DATABRICKS_TOKEN" \
